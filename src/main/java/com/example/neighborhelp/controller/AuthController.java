@@ -11,8 +11,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.view.RedirectView;
 import javax.validation.Valid;
-
 
 @RestController
 @RequestMapping("api/v1/auth")
@@ -25,7 +25,6 @@ public class AuthController {
         this.authService = authService;
         this.userRepository = userRepository;
     }
-
 
     @PostMapping(
             value = "/register",
@@ -47,21 +46,56 @@ public class AuthController {
     }
 
     @GetMapping("/verify")
-    public ResponseEntity<String> verifyUser(@RequestParam String token) {
-        User user = userRepository.findByVerificationToken(token)
-                .orElseThrow(() -> new ResourceNotFoundException("Invalid token"));
-        user.setEnabled(true);
-        user.setVerified(true);
-        user.setVerificationToken(null);
-        userRepository.save(user);
-        return ResponseEntity.ok("Account verified successfully. You can now log in.");
+    public RedirectView verifyUser(@RequestParam String token) {
+        try {
+            User user = userRepository.findByVerificationToken(token)
+                    .orElseThrow(() -> new ResourceNotFoundException("Invalid verification token"));
+
+            // Set user as enabled and verified
+            user.setEnabled(true);
+            user.setVerified(true);
+            user.setVerificationToken(null); // Clear the token after successful verification
+            userRepository.save(user);
+
+            // Redirect to your Vercel frontend
+            return new RedirectView("https://neighborlyunion.com/verify-success");
+
+        } catch (ResourceNotFoundException e) {
+            // Redirect to an error page if token is invalid
+            return new RedirectView("https://neighborlyunion.com/verify-error?error=invalid-token");
+        } catch (Exception e) {
+            // Redirect to an error page for any other exceptions
+            return new RedirectView("https://neighborlyunion.com/verify-error?error=verification-failed");
+        }
+    }
+
+    // Alternative endpoint that returns JSON response (useful for API testing)
+    @GetMapping("/verify-status")
+    public ResponseEntity<MessageResponse> verifyUserStatus(@RequestParam String token) {
+        try {
+            User user = userRepository.findByVerificationToken(token)
+                    .orElseThrow(() -> new ResourceNotFoundException("Invalid verification token"));
+
+            user.setEnabled(true);
+            user.setVerified(true);
+            user.setVerificationToken(null);
+            userRepository.save(user);
+
+            return ResponseEntity.ok(new MessageResponse("Account verified successfully. You can now log in."));
+
+        } catch (ResourceNotFoundException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(new MessageResponse("Invalid verification token"));
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new MessageResponse("Verification failed. Please try again."));
+        }
     }
 
     @PostMapping("/refresh-token")
     public ResponseEntity<TokenResponse> refreshToken(@Valid @RequestBody RefreshTokenRequest request) throws InvalidTokenException {
         return ResponseEntity.ok(authService.refreshToken(request.getRefreshToken()));
     }
-
 
     @PostMapping("/forgot-password")
     public ResponseEntity<MessageResponse> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request){
@@ -74,6 +108,4 @@ public class AuthController {
         authService.resetPassword(request.getToken(), request.getNewPassword());
         return ResponseEntity.ok(new MessageResponse("Password reset successful"));
     }
-
-
 }

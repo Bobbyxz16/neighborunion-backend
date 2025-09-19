@@ -1,6 +1,5 @@
 package com.example.neighborhelp.security;
 
-
 import org.apache.http.client.utils.URIBuilder;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
@@ -8,8 +7,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import java.net.URISyntaxException;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -18,6 +15,9 @@ public class EmailService {
 
     @Value("${resend.api.key}")
     private String apiKey;
+
+    @Value("${app.api.url:https://api.neighborlyunion.com}")
+    private String apiUrl;
 
     private final RestTemplate restTemplate = new RestTemplate();
     private final String RESEND_URL = "https://api.resend.com/emails";
@@ -28,15 +28,13 @@ public class EmailService {
         String html = buildVerificationEmailHtml(verificationUrl);
 
         sendEmail(toEmail, subject, html);
-
     }
-
 
     public String generateVerificationUrl(String token) {
         try {
             return new URIBuilder()
                     .setScheme("https")
-                    .setHost("neighborlyunion.com")
+                    .setHost("api.neighborlyunion.com")  // Tu Railway API
                     .setPath("/api/v1/auth/verify")
                     .setParameter("token", token)
                     .build()
@@ -62,10 +60,10 @@ public class EmailService {
                 </div>
                 
                 <p>If you didn't create an account with us, please ignore this email.</p>
+                <p><small>Link: %s</small></p>
             </div>
-            """.formatted(verificationUrl);
+            """.formatted(verificationUrl, verificationUrl);
     }
-
 
     public void sendPasswordResetEmail(String toEmail, String resetUrl) {
         String subject = "Password reset Request";
@@ -97,5 +95,4 @@ public class EmailService {
             System.err.println("Email sending failed: " + e.getMessage());
         }
     }
-
 }
