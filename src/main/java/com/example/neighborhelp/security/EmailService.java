@@ -34,7 +34,7 @@ public class EmailService {
         try {
             return new URIBuilder()
                     .setScheme("https")
-                    .setHost("api.neighborlyunion.com")  // Tu Railway API
+                    .setHost("api.neighborlyunion.com")  // ← Debe ser tu API Railway
                     .setPath("/api/v1/auth/verify")
                     .setParameter("token", token)
                     .build()
@@ -59,7 +59,6 @@ public class EmailService {
                     </a>
                 </div>
                 
-                <p>If you didn't create an account with us, please ignore this email.</p>
                 <p><small>Link: %s</small></p>
             </div>
             """.formatted(verificationUrl, verificationUrl);
