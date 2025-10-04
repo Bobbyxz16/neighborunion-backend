@@ -12,15 +12,25 @@ import com.example.neighborhelp.repository.UserRepository;
 import com.example.neighborhelp.repository.RefreshTokenRepository;
 import com.example.neighborhelp.repository.PasswordResetTokenRepository;
 import com.example.neighborhelp.security.EmailService;
+import com.example.neighborhelp.service.FirebaseService;
 import com.example.neighborhelp.security.JwtService;
 import com.example.neighborhelp.security.TokenResponse;
+import com.google.cloud.firestore.Firestore;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseAuthException;
+import com.google.firebase.auth.UserRecord;
+import com.google.firebase.cloud.FirestoreClient;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.io.IOException;
 import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -32,11 +42,13 @@ public class AuthService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final EmailService emailService;
+    private final FirebaseService firebaseService;
 
     public AuthService(UserRepository userRepository,PasswordEncoder passwordEncoder,
                        JwtService jwtService, AuthenticationManager authenticationManager,
                        RefreshTokenRepository refreshTokenRepository,
-                       PasswordResetTokenRepository passwordResetTokenRepository, EmailService emailService){
+                       PasswordResetTokenRepository passwordResetTokenRepository, EmailService emailService,
+                       FirebaseService firebaseService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
@@ -44,27 +56,38 @@ public class AuthService {
         this.refreshTokenRepository = refreshTokenRepository;
         this.passwordResetTokenRepository = passwordResetTokenRepository;
         this.emailService = emailService;
+        this.firebaseService = firebaseService;
     }
 
     @Transactional
-    public UserResponse register(UpdatedRegisterRequest request){
-        if (userRepository.existsByEmail((request.getEmail()))){
+    public UserResponse register(UpdatedRegisterRequest request) throws FirebaseAuthException {
+        if (userRepository.existsByEmail(request.getEmail())) {
             throw new ResourceNotFoundException("Email Already Exists");
         }
-
-        if (userRepository.existsByUsername(request.getUsername())){
+        if (userRepository.existsByUsername(request.getUsername())) {
             throw new ResourceNotFoundException("Username Already Exists");
         }
-
         if (request.getType() == User.UserType.ORGANIZATION &&
-                (request.getOrganizationName() == null || request.getOrganizationName().trim().isEmpty())){
+                (request.getOrganizationName() == null || request.getOrganizationName().trim().isEmpty())) {
             throw new ResourceNotFoundException("Organizations must have an organization name");
         }
 
+        // 1. Crear usuario en Firebase
+        UserRecord firebaseUser ;
+        try {
+            firebaseUser  = firebaseService.createFirebaseUser(request.getEmail(), request.getPassword());
+        } catch (Exception e) {
+            throw new RuntimeException("Firebase user creation failed: " + e.getMessage());
+        }
+
+        // 2. Generar link de verificación Firebase con retry
+        String verificationLink = FirebaseAuth.getInstance().generateEmailVerificationLink(firebaseUser.getEmail());
+
+        // 3. Guardar usuario local sin password (o con password cifrada si quieres)
         User user = new User();
         user.setUsername(request.getUsername());
         user.setEmail(request.getEmail());
-        user.setPassword(passwordEncoder.encode(request.getPassword()));
+        user.setFirebaseUid(firebaseUser.getUid());
         user.setRole(request.getRole());
         user.setType(request.getType());
         user.setOrganizationName(request.getOrganizationName());
@@ -72,14 +95,23 @@ public class AuthService {
         user.setWebsite(request.getWebsite());
         user.setVerified(false);
         user.setEnabled(false);
-        String verificationToken = generateVerificationToken(user);
-        user.setVerificationToken(verificationToken);
-        User savedUser = userRepository.save(user);
+        User savedUser  = userRepository.save(user);
 
-        emailService.sendVerificationEmail(savedUser.getEmail(), verificationToken);
+        // 4. Enviar email de verificación agregando documento en Firestore para trigger
+        if (verificationLink != null) {
+            Firestore db = FirestoreClient.getFirestore();
+            Map<String, Object> emailDoc = new HashMap<>();
+            emailDoc.put("to", request.getEmail());
+            emailDoc.put("subject", "Verify your NeighborHelp account");
+            emailDoc.put("html", emailService.buildVerificationEmailHtml(verificationLink));
+            emailDoc.put("from", "hello@neighborlyunion.com");
+            emailDoc.put("status", "pending");
+            db.collection("emails").add(emailDoc);
+        }
 
         return mapToUserResponse(savedUser);
     }
+
 
     private String generateVerificationToken(User user) {
         // You can use UUID or any other method to generate a unique token
@@ -92,11 +124,24 @@ public class AuthService {
         );
 
         User user = (User ) authentication.getPrincipal();
-        if (!user.getEnabled()) {
-            String verificationToken = generateVerificationToken(user);
-            emailService.sendVerificationEmail(user.getEmail(), verificationToken);
 
-            throw new RuntimeException(request.getEmail() + " is not enabled, please check your email for verification.");
+        // Consultar Firebase para verificar emailVerified
+        UserRecord firebaseUser ;
+        try {
+            firebaseUser  = firebaseService.getFirebaseUser (request.getEmail());
+        } catch (FirebaseAuthException e) {
+            throw new RuntimeException("Firebase user not found: " + e.getMessage());
+        }
+
+        if (!firebaseUser .isEmailVerified()) {
+            throw new RuntimeException("Email not verified. Please check your email for verification.");
+        }
+
+        // Sincronizar estado local si es necesario
+        if (!user.getVerified()) {
+            user.setVerified(true);
+            user.setEnabled(true);
+            userRepository.save(user);
         }
 
         String accessToken = jwtService.generateToken(user);
@@ -109,6 +154,7 @@ public class AuthService {
                 .expiresIn(jwtService.getExpirationTime())
                 .build();
     }
+
 
 
     private RefreshToken createRefreshToken(Long userId){
@@ -139,7 +185,7 @@ public class AuthService {
                 .build();
     }
 
-    public void initiatePasswordReset(String email) {
+    public void initiatePasswordReset(String email) throws IOException {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(()-> new ResourceNotFoundException("User not found with email: " + email));
         String token = UUID.randomUUID().toString();
@@ -151,8 +197,8 @@ public class AuthService {
 
         passwordResetTokenRepository.save(passwordResetToken);
 
-        String resetUrl = "https://neighbothelp.com/reset-password?token= " + token;
-        emailService.sendPasswordResetEmail(user.getEmail(), resetUrl);
+       // String resetUrl = "https://neighbothelp.com/reset-password?token= " + token;
+       // emailService.sendPasswordResetEmail(user.getEmail(), resetUrl);
     }
 
     @Transactional

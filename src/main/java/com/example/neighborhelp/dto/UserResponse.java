@@ -18,7 +18,7 @@ public class UserResponse {
     private LocalDateTime createdAt;
 
     // Private constructor to enforce the use of the Builder
-    private UserResponse(Builder builder) {
+    public UserResponse(Builder builder) {
         this.id = builder.id;
         this.username = builder.username;
         this.email = builder.email;

@@ -31,3 +31,49 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Archivos Sensibles y Configuraciones ###
+# Configs de Spring Boot con secrets (API keys, passwords)
+application.properties
+application.yml
+application-*.properties  # Ej. application-dev.properties, application-prod.properties
+application-*.yml
+
+# Variables de entorno y secrets
+.env
+.env.local
+.env.*.local
+.env.example  # Incluye si tienes un template
+
+# Credenciales de servicios externos (Firebase, Resend, etc.)
+firebase-credentials.json  # Service account de Firebase Admin SDK
+*.key
+*.pem
+*.p12
+*.crt
+resend-api-key.txt  # O cualquier archivo con tokens
+
+# Logs y archivos temporales
+*.log
+logs/
+*.tmp
+temp/
+cache/
+
+# Base de datos local y dumps
+*.db
+*.h2.db
+*.sqlite
+*.sql  # Dumps de DB con datos sensibles
+database/
+
+# Node.js (si agregas frontend más adelante)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS y archivos generados
+.DS_Store  # Mac
+Thumbs.db  # Windows
+Desktop.ini  # Windows

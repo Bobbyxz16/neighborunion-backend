@@ -42,7 +42,7 @@ public class User {
     /**
      * Hashed password for security
      */
-    @Column(nullable = false) // Not null
+    @Column(nullable = true)
     private String password;
 
     /**
@@ -99,7 +99,7 @@ public class User {
      * Automatic timestamp for last update date
      */
     @UpdateTimestamp // Hibernate updates this automatically on changes
-    @Column(name = "updated_at", nullable = false) // Not null
+    @Column(name = "updated_at", nullable = true) // Not null
     private LocalDateTime updatedAt;
 
     @Column(name = "verification_token")
@@ -121,6 +121,32 @@ public class User {
         INDIVIDUAL,   // Represents a single person
         ORGANIZATION  // Represents a company/organization
     }
+
+    // Solo agregar estos campos a tu User entity existente:
+
+    @Column(unique = true, name = "firebase_uid")
+    private String firebaseUid;
+
+    @Column(name = "auth_provider")
+    private String authProvider = "LOCAL"; // "LOCAL" o "FIREBASE"
+
+    // Getter y setter
+    public String getFirebaseUid() {
+        return firebaseUid;
+    }
+
+    public void setFirebaseUid(String firebaseUid) {
+        this.firebaseUid = firebaseUid;
+    }
+
+    public String getAuthProvider() {
+        return authProvider;
+    }
+
+    public void setAuthProvider(String authProvider) {
+        this.authProvider = authProvider;
+    }
+
 
     public Long getId() { return id; }
     public String getUsername() {return username;}

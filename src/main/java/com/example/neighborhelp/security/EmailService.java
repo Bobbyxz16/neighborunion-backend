@@ -1,50 +1,50 @@
-package com.example.neighborhelp.security;
+package com.example.neighborhelp.security;  // Ajusta según tu package
 
-import org.apache.http.client.utils.URIBuilder;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.*;
-import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
-
-import java.net.URISyntaxException;
-import java.util.HashMap;
-import java.util.Map;
+import org.springframework.beans.factory.annotation.Value;  // Para @Value
+import org.springframework.http.HttpEntity;  // Para HttpEntity
+import org.springframework.http.HttpHeaders;  // Para HttpHeaders
+import org.springframework.http.HttpMethod;  // Para HttpMethod.POST
+import org.springframework.http.MediaType;  // Para MediaType.APPLICATION_JSON
+import org.springframework.http.ResponseEntity;  // Para ResponseEntity
+import org.springframework.stereotype.Service;  // Para @Service
+import org.springframework.web.client.RestTemplate;  // Para RestTemplate
+import java.util.HashMap;  // Para HashMap
+import java.util.Map;  // Para Map
 
 @Service
 public class EmailService {
 
     @Value("${resend.api.key}")
-    private String apiKey;
-
-    @Value("${app.api.url:https://api.neighborlyunion.com}")
-    private String apiUrl;
+    private String resendApiKey;
 
     private final RestTemplate restTemplate = new RestTemplate();
-    private final String RESEND_URL = "https://api.resend.com/emails";
 
-    public void sendVerificationEmail(String toEmail, String verificationToken) {
-        String verificationUrl = generateVerificationUrl(verificationToken);
-        String subject = "Verify your NeighborHelp account";
-        String html = buildVerificationEmailHtml(verificationUrl);
+    public void sendVerificationEmail(String toEmail, String verificationLink) {
+        String url = "https://api.resend.com/emails";
 
-        sendEmail(toEmail, subject, html);
-    }
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(resendApiKey);
 
-    public String generateVerificationUrl(String token) {
+        Map<String, Object> emailRequest = new HashMap<>();
+        emailRequest.put("from", "NeighborHelp <no-reply@neighborlyunion.com>");
+        emailRequest.put("to", toEmail);
+        emailRequest.put("subject", "Verify your NeighborHelp account");
+        emailRequest.put("html", buildVerificationEmailHtml(verificationLink));
+
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(emailRequest, headers);
+
         try {
-            return new URIBuilder()
-                    .setScheme("https")
-                    .setHost("api.neighborlyunion.com")  // ← Debe ser tu API Railway
-                    .setPath("/api/v1/auth/verify")
-                    .setParameter("token", token)
-                    .build()
-                    .toString();
-        } catch (URISyntaxException e) {
-            throw new RuntimeException("Error generating verification URL", e);
+            ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, entity, String.class);
+            System.out.println("Resend API Response: " + response.getStatusCode());
+            System.out.println("Response body: " + response.getBody());
+        } catch (Exception e) {
+            System.err.println("Resend email failed: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
-    private String buildVerificationEmailHtml(String verificationUrl) {
+    public String buildVerificationEmailHtml(String verificationLink) {
         return """
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
                 <h2 style="color: #2E86C1;">Welcome to NeighborHelp!</h2>
@@ -59,39 +59,9 @@ public class EmailService {
                     </a>
                 </div>
                 
-                <p><small>Link: %s</small></p>
+                <p>Or copy this link: <a href="%s">%s</a></p>
+                <p>If you didn't create an account with us, please ignore this email.</p>
             </div>
-            """.formatted(verificationUrl, verificationUrl);
-    }
-
-    public void sendPasswordResetEmail(String toEmail, String resetUrl) {
-        String subject = "Password reset Request";
-        String html = "<h2>Password Reset</h2>" +
-                "<p>Click the link below to reset your password:</p>" +
-                "<a href=\"" + resetUrl + "\">Reset Password</a>";
-
-        sendEmail(toEmail, subject, html);
-    }
-
-    private void sendEmail(String toEmail, String subject, String htmlContent) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.setBearerAuth(apiKey);
-
-        Map<String, Object> request = new HashMap<>();
-        request.put("from", "NeighborHelp <hello@neighborlyunion.com>");
-        request.put("to", toEmail);
-        request.put("subject", subject);
-        request.put("html", htmlContent);
-
-        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
-
-        try {
-            ResponseEntity<String> response = restTemplate.exchange(RESEND_URL, HttpMethod.POST, entity, String.class);
-            System.out.println("Email sent: " + response.getStatusCode());
-            System.out.println(response.getBody());
-        } catch (Exception e){
-            System.err.println("Email sending failed: " + e.getMessage());
-        }
+            """.formatted(verificationLink, verificationLink, verificationLink);
     }
 }
