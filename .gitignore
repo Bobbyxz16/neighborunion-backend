@@ -77,3 +77,7 @@ yarn-error.log*
 .DS_Store  # Mac
 Thumbs.db  # Windows
 Desktop.ini  # Windows
+
+# Firebase secrets
+*-firebase-adminsdk-*.json
+src/main/resources/*.json  # Ajusta si tienes JSON no sensibles
