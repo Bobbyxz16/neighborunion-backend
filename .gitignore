@@ -1,4 +1,7 @@
+# HELP.md
 HELP.md
+
+### Maven ###
 target/
 !.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
@@ -32,52 +35,76 @@ build/
 ### VS Code ###
 .vscode/
 
-### Archivos Sensibles y Configuraciones ###
-# Configs de Spring Boot con secrets (API keys, passwords)
+### Archivos de Configuración Sensibles ###
+# Configuración de Spring Boot - IGNORAR completamente
+src/main/resources/application.properties
+src/main/resources/application.yml
+src/main/resources/application-*.properties
+src/main/resources/application-*.yml
+
+# Archivos de configuración en otros directorios
 application.properties
 application.yml
 application-*.properties
 application-*.yml
+config/application.properties
+config/application.yml
 
-# Variables de entorno y secrets
+### Variables de entorno y secrets ###
 .env
 .env.local
 .env.*.local
-.env.example  # Incluye si tienes un template
 
-# Credenciales de servicios externos (Firebase, Resend, etc.)
-firebase-credentials.json  # Service account de Firebase Admin SDK
+### Credenciales de servicios externos ###
+# Firebase
+firebase-credentials.json
+*-firebase-adminsdk-*.json
+service-account-key.json
+
+# SSL Certificates y claves privadas
 *.key
 *.pem
 *.p12
 *.crt
-resend-api-key.txt  # O cualquier archivo con tokens
+*.cer
 
-# Logs y archivos temporales
+# Otros APIs y tokens
+resend-api-key.txt
+*.token
+*.secret
+
+### Logs ###
 *.log
 logs/
+
+### Archivos temporales ###
 *.tmp
 temp/
 cache/
 
-# Base de datos local y dumps
+### Base de datos local ###
 *.db
 *.h2.db
 *.sqlite
-*.sql  # Dumps de DB con datos sensibles
+*.mv.db
 database/
 
-# Node.js (si agregas frontend más adelante)
+### Node.js ###
 node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# OS y archivos generados
-.DS_Store  # Mac
-Thumbs.db  # Windows
-Desktop.ini  # Windows
+### Sistema operativo ###
+.DS_Store
+Thumbs.db
+Desktop.ini
 
-# Firebase secrets
-*-firebase-adminsdk-*.json
-src/main/resources/*.json  # Ajusta si tienes JSON no sensibles
+# Archivos compilados adicionales
+*.class
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+*.rar
