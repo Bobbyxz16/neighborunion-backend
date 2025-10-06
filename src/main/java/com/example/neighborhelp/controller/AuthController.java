@@ -11,6 +11,7 @@ import com.example.neighborhelp.service.AuthService;
 import com.example.neighborhelp.service.FirebaseService;
 import com.google.api.core.ApiFuture;
 import com.google.cloud.firestore.DocumentReference;
+import com.google.firebase.auth.ActionCodeSettings;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthException;
 import com.example.neighborhelp.service.UserService;
@@ -145,13 +146,33 @@ public class AuthController {
     @PostMapping("/firebase-register")
     public ResponseEntity<Map<String, Object>> firebaseRegister(@Valid @RequestBody UpdatedRegisterRequest request) {
         try {
-            // 1. Create Firebase user (without email verification)
+            // 1. Create Firebase user
             UserRecord firebaseUser = firebaseService.createFirebaseUser(request.getEmail(), request.getPassword());
 
-            // 2. Generate YOUR OWN verification token
-            String verificationToken = UUID.randomUUID().toString();
+            // 2. Configure action code settings with your callback URL
+            ActionCodeSettings actionCodeSettings = ActionCodeSettings.builder()
+                    .setUrl("https://api.neighborlyunion.com/auth/firebase-verify-callback")
+                    .setHandleCodeInApp(false) // Will redirect to your URL
+                    .build();
 
-            // 3. Save user to YOUR database with the token
+            // 3. Generate verification link with settings
+            String verificationLink = FirebaseAuth.getInstance()
+                    .generateEmailVerificationLink(request.getEmail(), actionCodeSettings);
+
+            // 4. Send email
+            Firestore db = FirestoreClient.getFirestore();
+            Map<String, Object> emailDoc = new HashMap<>();
+            emailDoc.put("to", request.getEmail());
+
+            Map<String, Object> message = new HashMap<>();
+            message.put("subject", "Verify your NeighborHelp account");
+            message.put("html", emailService.buildVerificationEmailHtml(verificationLink));
+
+            emailDoc.put("message", message);
+            ApiFuture<DocumentReference> addedDocRef = db.collection("mail").add(emailDoc);
+            DocumentReference docRef = addedDocRef.get();
+
+            // 5. Save user to database
             User user = new User();
             user.setUsername(request.getUsername());
             user.setEmail(request.getEmail());
@@ -162,34 +183,14 @@ public class AuthController {
             user.setOrganizationName(request.getOrganizationName());
             user.setDescription(request.getDescription());
             user.setWebsite(request.getWebsite());
-            user.setVerificationToken(verificationToken); // Your token
             user.setEnabled(false);
             user.setVerified(false);
             User savedUser = userRepository.save(user);
 
-            // 4. Create YOUR verification link (points to your API)
-            String verificationLink = "https://api.neighborlyunion.com/api/auth/verify-email?token=" + verificationToken;
-
-            // 5. Send email via Firestore Trigger
-            Firestore db = FirestoreClient.getFirestore();
-            Map<String, Object> emailDoc = new HashMap<>();
-            emailDoc.put("to", request.getEmail());
-
-            Map<String, Object> message = new HashMap<>();
-            message.put("subject", "Verify your NeighborHelp account");
-            message.put("html", emailService.buildVerificationEmailHtml(verificationLink));
-
-            emailDoc.put("message", message);
-
-            ApiFuture<DocumentReference> addedDocRef = db.collection("mail").add(emailDoc);
-            DocumentReference docRef = addedDocRef.get();
-            System.out.println("Email document added: " + docRef.getId());
-
             Map<String, Object> response = new HashMap<>();
-            response.put("message", "User registered successfully. Check email for verification.");
+            response.put("message", "User registered. Check email for verification.");
             response.put("userId", savedUser.getId());
             response.put("email", savedUser.getEmail());
-            response.put("firebaseUid", firebaseUser.getUid());
 
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
 
@@ -240,30 +241,34 @@ public class AuthController {
         }
     }
 
-    /**
-     * Login with Firebase
-     */
     @PostMapping("/firebase-login")
     public ResponseEntity<Map<String, Object>> firebaseLogin(@RequestBody Map<String, String> request) {
         try {
             String email = request.get("email");
 
-            // 1. Get Firebase user
+            // Get Firebase user - Firebase has already verified them when they clicked the link
             UserRecord firebaseUser = firebaseService.getFirebaseUser(email);
 
-            // 2. Find user in YOUR database
-            User user = userRepository.findByFirebaseUid(firebaseUser.getUid())
-                    .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-
-            // 3. Check if user is verified in YOUR system
-            if (!user.getVerified() || !user.getEnabled()) {
+            if (!firebaseUser.isEmailVerified()) {
                 Map<String, Object> error = new HashMap<>();
-                error.put("error", "Email not verified. Please check your email and verify your account.");
-                error.put("verified", false);
+                error.put("error", "Email not verified. Please check your email and click the verification link.");
+                error.put("emailVerified", false);
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
             }
 
-            // 4. Generate tokens
+            // User is verified in Firebase, update your database
+            User user = userRepository.findByFirebaseUid(firebaseUser.getUid())
+                    .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+            // Sync verification status from Firebase to your database
+            if (firebaseUser.isEmailVerified() && !user.getVerified()) {
+                user.setEnabled(true);
+                user.setVerified(true);
+                userRepository.save(user);
+                System.out.println("User database updated - verified and enabled: " + email);
+            }
+
+            // Generate tokens
             String customToken = firebaseService.createCustomToken(firebaseUser.getUid());
             String accessToken = jwtService.generateToken(user);
             RefreshToken refreshToken = refreshTokenService.createRefreshToken(user.getId());
@@ -275,6 +280,7 @@ public class AuthController {
             response.put("refreshToken", refreshToken.getToken());
             response.put("tokenType", "Bearer");
             response.put("expiresIn", jwtService.getExpirationTime());
+            response.put("emailVerified", true);
             response.put("user", userService.mapToUserResponse(user));
 
             return ResponseEntity.ok(response);
@@ -283,12 +289,7 @@ public class AuthController {
             Map<String, Object> error = new HashMap<>();
             error.put("error", "Firebase authentication failed: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
-        } catch (ResourceNotFoundException e) {
-            Map<String, Object> error = new HashMap<>();
-            error.put("error", e.getMessage());
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
         } catch (Exception e) {
-            e.printStackTrace();
             Map<String, Object> error = new HashMap<>();
             error.put("error", "Login failed: " + e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);

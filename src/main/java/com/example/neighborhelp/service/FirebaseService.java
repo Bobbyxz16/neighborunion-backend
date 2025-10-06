@@ -18,7 +18,7 @@ import java.io.InputStream;
 @Service
 public class FirebaseService {
 
-    @Value("${firebase.config.path:neighborhelp-e7f2b-firebase-adminsdk-fbsvc-1c5604399a.json}")
+    @Value("${firebase.config.path:C:\\Users\\bobby\\IdeaProjects\\NeighborHelp\\src\\main\\resources\\neighborhelp-e7f2b-firebase-adminsdk-fbsvc-a91ee43094.json}")
     private String firebaseConfigPath;
 
     @PostConstruct

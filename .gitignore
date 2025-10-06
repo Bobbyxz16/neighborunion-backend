@@ -36,7 +36,7 @@ build/
 # Configs de Spring Boot con secrets (API keys, passwords)
 application.properties
 application.yml
-application-*.properties  # Ej. application-dev.properties, application-prod.properties
+application-*.properties
 application-*.yml
 
 # Variables de entorno y secrets

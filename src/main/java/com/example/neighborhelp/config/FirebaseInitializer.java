@@ -4,10 +4,11 @@ import com.google.auth.oauth2.GoogleCredentials;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.FirebaseOptions;
 import jakarta.annotation.PostConstruct;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
-import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 
 @Component
 public class FirebaseInitializer {
@@ -15,7 +16,8 @@ public class FirebaseInitializer {
     @PostConstruct
     public void initialize() {
         try {
-            FileInputStream serviceAccount = new FileInputStream("C:\\Users\\bobby\\IdeaProjects\\NeighborHelp\\src\\main\\resources\\neighborhelp-e7f2b-firebase-adminsdk-fbsvc-1c5604399a.json");
+            // Cargar desde classpath (src/main/resources)
+            InputStream serviceAccount = new ClassPathResource("neighborhelp-e7f2b-firebase-adminsdk-fbsvc-a91ee43094.json").getInputStream();
 
             FirebaseOptions options = FirebaseOptions.builder()
                     .setCredentials(GoogleCredentials.fromStream(serviceAccount))

@@ -1,49 +1,40 @@
 services:
-  app:
+  springboot-app:
     build: .
-    container_name: springboot
-    expose:
-      - 8080
-    networks:
-      - app-network
-    environment:
-      - SPRING_PROFILES_ACTIVE=prod
-    restart: unless-stopped
-
-  nginx:
-    image: nginx:latest
-    container_name: nginx-proxy
-    volumes:
-      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
-      - ./nginx/ssl:/etc/letsencrypt
-      - ./certbot:/var/www/certbot
     ports:
-      - "80:80"
-      - "443:443"
+      - "8081:8080"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql-db:3306/neighborhelp
+      - SPRING_DATASOURCE_USERNAME=bobby
+      - SPRING_DATASOURCE_PASSWORD=Futbol2005@
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
     depends_on:
-      - app
+      - mysql-db
     networks:
       - app-network
+
+  mysql-db:
+    image: mysql:8.0
+    environment:
+      - MYSQL_DATABASE=neighborhelp
+      - MYSQL_USER=bobby
+      - MYSQL_PASSWORD=Futbol2005@
+      - MYSQL_ROOT_PASSWORD=Futbol2005@
+    volumes:
+      - mysql_data:/var/lib/mysql
+    ports:
+      - "3307:3306"
+    networks:
+      - app-network
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot123" ]
+      timeout: 30s
+      retries: 10
+      start_period: 60s
     restart: unless-stopped
 
-  certbot:
-    image: certbot/certbot
-    container_name: certbot
-    volumes:
-      - ./nginx/ssl:/etc/letsencrypt
-      - ./certbot:/var/www/certbot
-    depends_on:
-      - nginx
-    entrypoint: ""
-    command: >
-      /bin/sh -c "
-      certbot certonly --webroot -w /var/www/certbot
-      --email bobbyokolie14@gmail.com --agree-tos --no-eff-email
-      --force-renewal -d neighborlyunion.com -d www.neighborlyunion.com
-      && while true; do sleep 12h; certbot renew; done"
-    networks:
-      - app-network
-    restart: unless-stopped
+volumes:
+  mysql_data:
 
 networks:
   app-network:
