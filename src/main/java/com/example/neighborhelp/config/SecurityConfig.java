@@ -51,8 +51,10 @@ public class SecurityConfig {
 
                 // Autorización: Permite públicos, protege el resto
                 .authorizeHttpRequests(auth -> auth
+                        .requestMatchers("/", "/health", "/actuator/health").permitAll()
                         .requestMatchers("/api/auth/**").permitAll()  // Públicos: register, login
                         .requestMatchers("/api/profile/**").hasRole("USER")  // Ejemplo: Protegido, requiere rol USER
+
                         .anyRequest().authenticated()  // Resto: Requiere JWT válido
                 )
 
